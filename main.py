@@ -19,7 +19,10 @@ def generate_key():
         key_file.write(key)
 
 # Load the previously generated key
+
 def load_key():
+    if not os.path.exists("secret.key"):
+        generate_key()  # Generate a new key if it doesn't exist
     return open("secret.key", "rb").read()
 
 def encrypt_password(password):
@@ -27,6 +30,7 @@ def encrypt_password(password):
     fernet = Fernet(key)
     encrypted_password = fernet.encrypt(password.encode())
     return encrypted_password
+
 
 def decrypt_password(encrypted_password):
     key = load_key()
