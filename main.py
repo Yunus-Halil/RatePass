@@ -9,6 +9,30 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QPropertyAnimation, QRect, QEasingCurve, Qt
 from PyQt6.QtGui import QColor, QIcon
+from cryptography.fernet import Fernet
+import os
+
+# Generate a new key and save it to a file
+def generate_key():
+    key = Fernet.generate_key()
+    with open("secret.key", "wb") as key_file:
+        key_file.write(key)
+
+# Load the previously generated key
+def load_key():
+    return open("secret.key", "rb").read()
+
+def encrypt_password(password):
+    key = load_key()
+    fernet = Fernet(key)
+    encrypted_password = fernet.encrypt(password.encode())
+    return encrypted_password
+
+def decrypt_password(encrypted_password):
+    key = load_key()
+    fernet = Fernet(key)
+    decrypted_password = fernet.decrypt(encrypted_password).decode()
+    return decrypted_password
 
 # Preset themes for the drop-down
 PRESET_THEMES = {
@@ -84,7 +108,7 @@ class AnimatedButton(QPushButton):
                 border: 2px solid {theme['text']};  /* Outline on hover */
             }}
             QPushButton:pressed {{
-                background-color: {self.darker_color(theme['accent'])};  /* Optional: Change color when pressed */
+                background-color: {self.darker_color(theme['accent'])};  /* Change color when pressed */
                 border: 2px solid {theme['text']};  /* Keep the outline when pressed */
             }}
         """)
@@ -92,9 +116,9 @@ class AnimatedButton(QPushButton):
     def darker_color(self, color):
         """Return a darker shade of the given color."""
         color = QColor(color)
-        return color.darker(125).name()  # Darker by 10%
+        return color.darker(150).name()  # Call the method and return the color in hex format
 
-    def enterEvent(self, event):
+    def enterEvent(self, event ):
         geo = self.geometry()
         self._animation.setStartValue(geo)
         self._animation.setEndValue(QRect(geo.x(), geo.y() - 2, geo.width(), geo.height()))
@@ -110,7 +134,7 @@ class AnimatedButton(QPushButton):
 
 class ThemeCustomizer(QDialog):
     def __init__(self, current_theme, parent=None):
-        super().__init__(parent )
+        super().__init__(parent)
         self.current_theme = current_theme.copy()
         self.setup_ui()
 
@@ -231,7 +255,7 @@ class PasswordStrengthMeter(QFrame):
         if is_visible:
             self.toggle_button.setIcon(QIcon('eye.png'))  # Show icon
         else:
-            self.toggle_button.setIcon(QIcon('eye_off.png'))  # Hide icon (use a different icon for the 'off' state)
+            self.toggle_button.setIcon(QIcon('eye_off.png '))  # Hide icon (use a different icon for the 'off' state)
 
     def check_password_strength(self, password):
         requirements_met = 0
@@ -248,7 +272,7 @@ class PasswordStrengthMeter(QFrame):
             self.requirement_labels['uppercase'].setText('✅ Contains uppercase letter')
             requirements_met += 1
         else:
-            self.requirement_labels['uppercase'].setText ('❌ Contains uppercase letter')
+            self.requirement_labels['uppercase'].setText('❌ Contains uppercase letter')
         
         # Check lowercase
         if re.search(r'[a-z]', password):
@@ -265,7 +289,7 @@ class PasswordStrengthMeter(QFrame):
             self.requirement_labels['number'].setText('❌ Contains number')
         
         # Check special characters
-        if re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        if re.search(r'[!@#$%^&*(),.?":{}|<>]', password ):
             self.requirement_labels['special'].setText('✅ Contains special character')
             requirements_met += 1
         else:
@@ -414,10 +438,11 @@ class ModernPasswordManager(QMainWindow):
             button.set_theme(self.current_theme)
         self.password_strength_meter.set_theme(self.current_theme)
 
-    def add_password(self):
+    def add_password (self):
         service = self.service_input.text().strip()
         username = self.username_input.text().strip()
         password = self.password_input.text().strip()
+        
 
         if service and username and password:
             strength = self.password_strength_meter.check_password_strength(password)
@@ -431,9 +456,10 @@ class ModernPasswordManager(QMainWindow):
                 if response == QMessageBox.StandardButton.No:
                     return
 
+            encrypted_password = encrypt_password(password)
             self.passwords[service] = {
                 'username': username,
-                'password': password
+                'password': encrypted_password.decode()  # Store the encrypted password as a string
             }
             self.save_passwords()
             self.update_password_list()
@@ -456,12 +482,13 @@ class ModernPasswordManager(QMainWindow):
     def show_password(self, item):
         service = item.text().split(" - ")[0]
         if service in self.passwords:
-            password = self.passwords[service].get('password', 'Unknown Password')  # Default to 'Unknown Password' if key is missing
-            username = self.passwords[service].get('username', 'Unknown User')  # Default to 'Unknown User' if key is missing
+            encrypted_password = self.passwords[service].get('password', 'Unknown Password')
+            decrypted_password = decrypt_password(encrypted_password.encode())
+            username = self.passwords[service].get('username', 'Unknown User')
             QMessageBox.information(
                 self,
                 "Password Details",
-                f"Service: {service}\nUsername: {username}\nPassword: {password}"
+                f"Service: {service}\nUsername: {username}\nPassword: {decrypted_password}"
             )
 
     def customize_theme(self):
@@ -488,7 +515,7 @@ class ModernPasswordManager(QMainWindow):
                         del self.passwords[service]  # Remove invalid entry
         except FileNotFoundError:
             self.passwords = {}
-        except json.JSONDecodeError:
+        except json.JSONDecodeError :
             QMessageBox.warning(self, "Error", "Failed to decode passwords JSON. The file may be corrupted.")
             self.passwords = {}
         except Exception as e:
@@ -515,10 +542,16 @@ class ModernPasswordManager(QMainWindow):
 
     def edit_password(self, service):
         if service in self.passwords:
-            dialog = PasswordEditDialog(service, self.passwords[service].get('username', 'Unknown User'), self.passwords[service].get('password', 'Unknown Password'), self)
+            encrypted_password = self.passwords[service].get('password', 'Unknown Password')
+            decrypted_password = decrypt_password(encrypted_password.encode())
+            dialog = PasswordEditDialog(service, self.passwords[service].get('username', 'Unknown User'), decrypted_password, self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 new_values = dialog.get_values()
-                self.passwords[service] = new_values
+                encrypted_password = encrypt_password(new_values['password'])
+                self.passwords[service] = {
+                    'username': new_values['username'],
+                    'password': encrypted_password.decode()
+                }
                 self.save_passwords()
                 self.update_password_list()
 
@@ -531,7 +564,7 @@ class ModernPasswordManager(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             if response == QMessageBox.StandardButton.Yes:
-                del self.passwords[service]
+                del self.passwords[ service]
                 self.save_passwords()
                 self.update_password_list()
 
