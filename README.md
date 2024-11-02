@@ -2,7 +2,7 @@
 
 RatePass is an open-source password checker and saver application, featuring
 
-| Fully encrypted using fernet
+**| Fully encrypted using fernet**
 
 |  Customizable themes
 
